@@ -185,11 +185,16 @@ If Explorer decoration colors are disabled, colored file icons provide the same
 status distinction without overriding that global preference. These become explicit
 colored `A`, `D`, `M`, and other Git status badges when label colors are unavailable.
 
+Review comments live in the storage folder as JSON. If that file is edited outside
+VS Code, for example by a checkout or another tool, open threads reload automatically.
+A data file that is not valid JSON is never overwritten: the extension reports it and
+leaves it for you to fix.
+
 **Config** (`codeReview.*`):
 
 |Setting|Default|Description|
 |-------|-------|-----------|
-|`dataFile`|`"code-review/.code-review.json"`|Workspace-relative storage for inline review comments.|
+|`storageDir`|`".artifacts-temp"`|Workspace-relative folder for review comments, checked files, and exports. It gets a `.gitignore` that ignores everything in it. Data from the old `code-review/` folder is copied here on first use.|
 |`showAuthor`|`false`|Include author names in comments and exports.|
 |`author`|`""`|Author override for comment/export metadata.|
 |`autoRefresh`|`true`|Refresh the changes tree on workspace changes.|

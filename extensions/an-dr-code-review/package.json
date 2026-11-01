@@ -561,10 +561,10 @@
     "configuration": {
       "title": "an-dr: Code Review",
       "properties": {
-        "codeReview.dataFile": {
+        "codeReview.storageDir": {
           "type": "string",
-          "default": "code-review/.code-review.json",
-          "description": "Path relative to workspace root where review comments are stored."
+          "default": ".artifacts-temp",
+          "markdownDescription": "Folder, relative to the workspace root, that holds review comments, checked files, and exports. It gets a `.gitignore` that ignores everything in it. Data from the old `code-review/` folder is copied here on first use."
         },
         "codeReview.showAuthor": {
           "type": "boolean",

@@ -7,10 +7,14 @@ import {
     StoredComment,
     StoredThread,
     ReviewData,
-    ensureCodeReviewDir,
+    ensureStorageDir,
+    fireReviewDataChanged,
+    getStorageDirSetting,
+    getStorageDirUri,
     loadReviewData,
     saveReviewData,
     relativeFilePath,
+    watchReviewData,
 } from './reviewStore';
 
 class ReviewComment implements vscode.Comment {
@@ -28,8 +32,6 @@ class ReviewComment implements vscode.Comment {
         this.timestamp = new Date(stored.timestamp);
     }
 }
-
-const CODE_REVIEW_DIR = 'code-review';
 
 type ExportBehavior = {
     showDocument: boolean;
@@ -169,16 +171,19 @@ async function writeMarkdownExport(data: ReviewData, behavior: ExportBehavior): 
         }
     }
 
-    await ensureCodeReviewDir();
-    const rootUri = vscode.workspace.workspaceFolders![0].uri;
-    const outUri = vscode.Uri.joinPath(rootUri, CODE_REVIEW_DIR, 'code-review.md');
+    const dirUri = getStorageDirUri();
+    if (!dirUri) {
+        return;
+    }
+    await ensureStorageDir();
+    const outUri = vscode.Uri.joinPath(dirUri, 'code-review.md');
     await vscode.workspace.fs.writeFile(outUri, Buffer.from(lines.join('\n'), 'utf8'));
     if (behavior.showDocument) {
         const doc = await vscode.workspace.openTextDocument(outUri);
         await vscode.window.showTextDocument(doc);
     }
     if (behavior.showNotification) {
-        vscode.window.showInformationMessage(`Code review exported to ${CODE_REVIEW_DIR}/code-review.md`);
+        vscode.window.showInformationMessage(`Code review exported to ${getStorageDirSetting()}/code-review.md`);
     }
 }
 
@@ -228,16 +233,19 @@ async function writeJiraExport(data: ReviewData, behavior: ExportBehavior): Prom
         }
     }
 
-    await ensureCodeReviewDir();
-    const rootUri = vscode.workspace.workspaceFolders![0].uri;
-    const outUri = vscode.Uri.joinPath(rootUri, CODE_REVIEW_DIR, 'code-review.jira');
+    const dirUri = getStorageDirUri();
+    if (!dirUri) {
+        return;
+    }
+    await ensureStorageDir();
+    const outUri = vscode.Uri.joinPath(dirUri, 'code-review.jira');
     await vscode.workspace.fs.writeFile(outUri, Buffer.from(lines.join('\n'), 'utf8'));
     if (behavior.showDocument) {
         const doc = await vscode.workspace.openTextDocument(outUri);
         await vscode.window.showTextDocument(doc);
     }
     if (behavior.showNotification) {
-        vscode.window.showInformationMessage(`Code review exported to ${CODE_REVIEW_DIR}/code-review.jira`);
+        vscode.window.showInformationMessage(`Code review exported to ${getStorageDirSetting()}/code-review.jira`);
     }
 }
 
@@ -311,12 +319,17 @@ export function activateCommentController(context: vscode.ExtensionContext): voi
     void restoreThreads();
     void syncAutoExports();
 
+    context.subscriptions.push(watchReviewData(() => {
+        void restoreThreads();
+        fireReviewDataChanged();
+    }));
+
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration((event) => {
             if (
                 event.affectsConfiguration('codeReview.autoExport') ||
                 event.affectsConfiguration('codeReview.exportCommentTimestamp') ||
-                event.affectsConfiguration('codeReview.dataFile')
+                event.affectsConfiguration('codeReview.storageDir')
             ) {
                 void syncAutoExports();
             }
