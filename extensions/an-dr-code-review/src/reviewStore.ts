@@ -5,6 +5,8 @@ export interface StoredComment {
     author?: string;
     body: string;
     timestamp: string;
+    /** ISO time of the last edit, absent when the comment was never edited. */
+    edited?: string;
 }
 
 export interface StoredThread {

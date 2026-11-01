@@ -90,6 +90,29 @@
         "icon": "$(trash)"
       },
       {
+        "command": "an-dr-code-review.editComment",
+        "title": "Edit Comment",
+        "category": "Code Review",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "an-dr-code-review.saveComment",
+        "title": "Save",
+        "category": "Code Review"
+      },
+      {
+        "command": "an-dr-code-review.cancelEditComment",
+        "title": "Cancel",
+        "category": "Code Review"
+      },
+      {
+        "command": "an-dr-code-review.clearAllComments",
+        "title": "Clear All Comments",
+        "category": "Code Review",
+        "icon": "$(clear-all)",
+        "enablement": "anDrCodeReview.hasComments"
+      },
+      {
         "command": "an-dr-code-review.exportMarkdown",
         "title": "Export Review to Markdown",
         "category": "Code Review"
@@ -298,6 +321,18 @@
         {
           "command": "an-dr-code-review.deleteThread",
           "when": "false"
+        },
+        {
+          "command": "an-dr-code-review.editComment",
+          "when": "false"
+        },
+        {
+          "command": "an-dr-code-review.saveComment",
+          "when": "false"
+        },
+        {
+          "command": "an-dr-code-review.cancelEditComment",
+          "when": "false"
         }
       ],
       "comments/commentThread/context": [
@@ -326,8 +361,25 @@
       ],
       "comments/comment/title": [
         {
+          "command": "an-dr-code-review.editComment",
+          "group": "inline@1",
+          "when": "commentController == an-dr-code-review"
+        },
+        {
           "command": "an-dr-code-review.deleteComment",
-          "group": "inline",
+          "group": "inline@2",
+          "when": "commentController == an-dr-code-review"
+        }
+      ],
+      "comments/comment/context": [
+        {
+          "command": "an-dr-code-review.cancelEditComment",
+          "group": "inline@1",
+          "when": "commentController == an-dr-code-review"
+        },
+        {
+          "command": "an-dr-code-review.saveComment",
+          "group": "inline@2",
           "when": "commentController == an-dr-code-review"
         }
       ],
@@ -451,6 +503,11 @@
           "command": "an-dr-code-review.showCommentsAsList",
           "when": "view == anDrCodeReviewComments && !anDrCodeReview.commentsViewAsList",
           "group": "navigation@1"
+        },
+        {
+          "command": "an-dr-code-review.clearAllComments",
+          "when": "view == anDrCodeReviewComments",
+          "group": "navigation@9"
         },
         {
           "command": "an-dr-code-review.showCommentsAsTree",

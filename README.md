@@ -185,6 +185,10 @@ If Explorer decoration colors are disabled, colored file icons provide the same
 status distinction without overriding that global preference. These become explicit
 colored `A`, `D`, `M`, and other Git status badges when label colors are unavailable.
 
+Each comment in the inline widget has **Edit** and **Delete** buttons. Edited comments
+are labelled `edited`. The Comments view's title bar has a **Clear All Comments**
+button, which asks for confirmation before it removes every comment in the workspace.
+
 Review comments live in the storage folder as JSON. If that file is edited outside
 VS Code, for example by a checkout or another tool, open threads reload automatically.
 A data file that is not valid JSON is never overwritten: the extension reports it and
@@ -209,6 +213,7 @@ leaves it for you to fix.
 
 - `Export Review to Markdown`
 - `Export Review to Jira`
+- `Clear All Comments`
 - `Change Base...`
 - `Refresh Changes`
 

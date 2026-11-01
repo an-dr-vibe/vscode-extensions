@@ -11,6 +11,7 @@ import {
     fireReviewDataChanged,
     getStorageDirSetting,
     getStorageDirUri,
+    onDidChangeReviewData,
     loadReviewData,
     saveReviewData,
     relativeFilePath,
@@ -19,17 +20,26 @@ import {
 
 class ReviewComment implements vscode.Comment {
     id: string;
-    body: vscode.MarkdownString;
+    body: string | vscode.MarkdownString;
     mode = vscode.CommentMode.Preview;
     author: vscode.CommentAuthorInformation;
     timestamp: Date;
+    label: string | undefined;
     contextValue = 'reviewComment';
+    // The persisted text, restored when an edit is cancelled.
+    savedBody: string;
 
     constructor(stored: StoredComment) {
         this.id = stored.id;
+        this.savedBody = stored.body;
         this.body = new vscode.MarkdownString(stored.body);
         this.author = { name: stored.author ?? '' };
         this.timestamp = new Date(stored.timestamp);
+        this.label = stored.edited ? 'edited' : undefined;
+    }
+
+    get text(): string {
+        return typeof this.body === 'string' ? this.body : this.body.value;
     }
 }
 
@@ -336,7 +346,10 @@ export function activateCommentController(context: vscode.ExtensionContext): voi
         })
     );
 
-    async function handleSubmit(reply: vscode.CommentReply): Promise<void> {
+    async function handleSubmit(reply: vscode.CommentReply | undefined): Promise<void> {
+        if (!reply?.thread) {
+            return;
+        }
         const root = vscode.workspace.workspaceFolders?.[0]?.uri;
         if (!root) {
             return;
@@ -398,18 +411,104 @@ export function activateCommentController(context: vscode.ExtensionContext): voi
 
             stored.comments.splice(idx, 1);
             const thread = idToThread.get(stored.id);
+            if (stored.comments.length === 0) {
+                data.threads.splice(data.threads.indexOf(stored), 1);
+            }
+            await saveReviewData(data);
             if (thread) {
                 thread.comments = thread.comments.filter((item) => (item as ReviewComment).id !== comment.id);
                 if (thread.comments.length === 0) {
-                    data.threads.splice(data.threads.indexOf(stored), 1);
                     idToThread.delete(stored.id);
                     thread.dispose();
                 }
             }
-            await saveReviewData(data);
             return;
         }
     }
+
+    function findThreadOf(comment: ReviewComment): vscode.CommentThread | undefined {
+        for (const thread of idToThread.values()) {
+            if (thread.comments.some((item) => (item as ReviewComment).id === comment.id)) {
+                return thread;
+            }
+        }
+        return undefined;
+    }
+
+    // Reassigning the array is what makes VS Code re-render a changed comment.
+    function setMode(comment: ReviewComment, mode: vscode.CommentMode): void {
+        const thread = findThreadOf(comment);
+        if (!thread) {
+            return;
+        }
+        thread.comments = thread.comments.map((item) => {
+            if ((item as ReviewComment).id === comment.id) {
+                item.mode = mode;
+            }
+            return item;
+        });
+    }
+
+    function handleEditComment(comment: ReviewComment): void {
+        comment.body = comment.savedBody;
+        setMode(comment, vscode.CommentMode.Editing);
+    }
+
+    function handleCancelEdit(comment: ReviewComment): void {
+        comment.body = new vscode.MarkdownString(comment.savedBody);
+        setMode(comment, vscode.CommentMode.Preview);
+    }
+
+    async function handleSaveComment(comment: ReviewComment): Promise<void> {
+        const body = comment.text.trim();
+        if (!body || body === comment.savedBody) {
+            handleCancelEdit(comment);
+            return;
+        }
+        const data = await loadReviewData();
+        const stored = data.threads.flatMap((thread) => thread.comments).find((item) => item.id === comment.id);
+        if (!stored) {
+            handleCancelEdit(comment);
+            return;
+        }
+        stored.body = body;
+        stored.edited = new Date().toISOString();
+        await saveReviewData(data);
+        comment.savedBody = body;
+        comment.label = 'edited';
+        handleCancelEdit(comment);
+    }
+
+    async function handleClearAll(): Promise<void> {
+        const data = await loadReviewData();
+        const commentCount = data.threads.reduce((sum, thread) => sum + thread.comments.length, 0);
+        if (data.threads.length === 0) {
+            vscode.window.showInformationMessage('Code Review: there are no comments to clear.');
+            return;
+        }
+        const threadLabel = data.threads.length === 1 ? '1 thread' : `${data.threads.length} threads`;
+        const commentLabel = commentCount === 1 ? '1 comment' : `${commentCount} comments`;
+        const choice = await vscode.window.showWarningMessage(
+            `Delete all ${commentLabel} in ${threadLabel}?`,
+            { modal: true, detail: 'This removes every review comment in the workspace and cannot be undone.' },
+            'Delete All',
+        );
+        if (choice !== 'Delete All') {
+            return;
+        }
+        await saveReviewData({ ...data, threads: [] });
+        for (const thread of idToThread.values()) {
+            thread.dispose();
+        }
+        idToThread.clear();
+    }
+
+    const updateHasComments = async () => {
+        const data = await loadReviewData();
+        await vscode.commands.executeCommand('setContext', 'anDrCodeReview.hasComments', data.threads.length > 0);
+    };
+    void updateHasComments();
+    context.subscriptions.push(onDidChangeReviewData(() => void updateHasComments()));
 
     async function setResolved(thread: vscode.CommentThread, resolved: boolean): Promise<void> {
         const threadId = threadToId.get(thread);
@@ -449,6 +548,10 @@ export function activateCommentController(context: vscode.ExtensionContext): voi
         vscode.commands.registerCommand('an-dr-code-review.resolveThread', (thread: vscode.CommentThread) => setResolved(thread, true)),
         vscode.commands.registerCommand('an-dr-code-review.unresolveThread', (thread: vscode.CommentThread) => setResolved(thread, false)),
         vscode.commands.registerCommand('an-dr-code-review.deleteThread', (thread: vscode.CommentThread) => handleDeleteThread(thread)),
+        vscode.commands.registerCommand('an-dr-code-review.editComment', (comment: ReviewComment) => handleEditComment(comment)),
+        vscode.commands.registerCommand('an-dr-code-review.saveComment', (comment: ReviewComment) => handleSaveComment(comment)),
+        vscode.commands.registerCommand('an-dr-code-review.cancelEditComment', (comment: ReviewComment) => handleCancelEdit(comment)),
+        vscode.commands.registerCommand('an-dr-code-review.clearAllComments', () => handleClearAll()),
         vscode.commands.registerCommand('an-dr-code-review.exportMarkdown', async () => writeMarkdownExport(await loadReviewData(), {
             showDocument: true,
             showNotification: true,
