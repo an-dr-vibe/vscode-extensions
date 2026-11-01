@@ -189,6 +189,11 @@ Each comment in the inline widget has **Edit** and **Delete** buttons. Edited co
 are labelled `edited`. The Comments view's title bar has a **Clear All Comments**
 button, which asks for confirmation before it removes every comment in the workspace.
 
+After every review change the extension writes `temp-code-review-latest.md` to the
+workspace root. It lists the open entries as `file:line` references and tells whoever
+addresses them, a person or an agent, to delete the file once every entry is done. The
+file is removed automatically when no entry is open; turn it off with `latestMarkdown`.
+
 Review comments live in the storage folder as JSON. If that file is edited outside
 VS Code, for example by a checkout or another tool, open threads reload automatically.
 A data file that is not valid JSON is never overwritten: the extension reports it and
@@ -199,6 +204,8 @@ leaves it for you to fix.
 |Setting|Default|Description|
 |-------|-------|-----------|
 |`storageDir`|`".artifacts-temp"`|Workspace-relative folder for review comments, checked files, and exports. It gets a `.gitignore` that ignores everything in it. Data from the old `code-review/` folder is copied here on first use.|
+|`latestMarkdown`|`true`|Write `temp-code-review-latest.md` with the open entries after every review change.|
+|`autoExport`|`"none"`|Keep `code-review.md`, `code-review.jira`, or both up to date in the storage folder after every change.|
 |`showAuthor`|`false`|Include author names in comments and exports.|
 |`author`|`""`|Author override for comment/export metadata.|
 |`autoRefresh`|`true`|Refresh the changes tree on workspace changes.|

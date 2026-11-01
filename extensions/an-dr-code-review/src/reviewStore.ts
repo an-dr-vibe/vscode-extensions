@@ -153,6 +153,12 @@ function parseReviewData(text: string): ReviewData | undefined {
 }
 
 let reportedCorruptText: string | undefined;
+let lastLoadCorrupt = false;
+
+/** True when the last load found a data file that is not valid review data. */
+export function isReviewDataCorrupt(): boolean {
+    return lastLoadCorrupt;
+}
 
 function reportCorrupt(uri: vscode.Uri, text: string): void {
     if (reportedCorruptText === text) {
@@ -173,11 +179,13 @@ export async function loadReviewData(): Promise<ReviewData> {
     }
     await migrateLegacyData(dir);
     const text = await readText(uri);
+    lastLoadCorrupt = false;
     if (text === undefined) {
         return { version: 1, threads: [] };
     }
     const data = parseReviewData(text);
     if (!data) {
+        lastLoadCorrupt = true;
         reportCorrupt(uri, text);
         return { version: 1, threads: [] };
     }

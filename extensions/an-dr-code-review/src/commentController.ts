@@ -11,12 +11,14 @@ import {
     fireReviewDataChanged,
     getStorageDirSetting,
     getStorageDirUri,
+    isReviewDataCorrupt,
     onDidChangeReviewData,
     loadReviewData,
     saveReviewData,
     relativeFilePath,
     watchReviewData,
 } from './reviewStore';
+import { UrlBuilder, syncLatestReviewFile } from './latestReviewFile';
 
 class ReviewComment implements vscode.Comment {
     id: string;
@@ -108,33 +110,31 @@ function resolveSymlink(relFile: string): string {
     }
 }
 
-function buildFileUrl(file: string, startLine: number, endLine: number): string | null {
+function createUrlBuilder(): UrlBuilder {
     const remote = gitExec('git remote get-url origin');
-    if (!remote) {
-        return null;
-    }
-
-    let base: string;
-    const ssh = remote.match(/^git@([^:]+):(.+?)(?:\.git)?$/);
+    let base: string | null = null;
+    const ssh = remote.match(/^(?:ssh:\/\/)?git@([^:/]+)[:/](.+?)(?:\.git)?$/);
+    const https = remote.match(/^https?:\/\/(?:[^@/]+@)?(.+?)(?:\.git)?$/);
     if (ssh) {
         base = `https://${ssh[1]}/${ssh[2]}`;
-    } else {
-        const https = remote.match(/^https?:\/\/(?:[^@]+@)?(.+?)(?:\.git)?$/);
-        if (!https) {
-            return null;
-        }
+    } else if (https) {
         base = `https://${https[1]}`;
     }
-
+    if (!base) {
+        return () => null;
+    }
     const branch = gitExec('git rev-parse --abbrev-ref HEAD') || 'main';
     const isGitLab = base.includes('gitlab');
-    const anchor = isGitLab
-        ? `#L${startLine + 1}-${endLine + 1}`
-        : `#L${startLine + 1}-L${endLine + 1}`;
-    return `${base}/blob/${branch}/${resolveSymlink(file)}${anchor}`;
+    const blob = isGitLab ? '-/blob' : 'blob';
+    return (file, startLine, endLine) => {
+        const anchor = isGitLab
+            ? `#L${startLine + 1}-${endLine + 1}`
+            : `#L${startLine + 1}-L${endLine + 1}`;
+        return `${base}/${blob}/${branch}/${resolveSymlink(file)}${anchor}`;
+    };
 }
 
-async function writeMarkdownExport(data: ReviewData, behavior: ExportBehavior): Promise<void> {
+async function writeMarkdownExport(data: ReviewData, behavior: ExportBehavior, urlFor: UrlBuilder = createUrlBuilder()): Promise<void> {
     if (data.threads.length === 0 && !behavior.allowEmpty) {
         vscode.window.showInformationMessage('Code Review: no comments to export.');
         return;
@@ -160,7 +160,7 @@ async function writeMarkdownExport(data: ReviewData, behavior: ExportBehavior): 
             const startLine = thread.line + 1;
             const endLine = thread.endLine + 1;
             const lineLabel = startLine === endLine ? `Line ${startLine}` : `Lines ${startLine}–${endLine}`;
-            const url = buildFileUrl(thread.file, thread.line, thread.endLine);
+            const url = urlFor(thread.file, thread.line, thread.endLine);
             const linkPart = url ? ` · [View online](${url})` : '';
             const resolvedPart = thread.resolved ? ' ✅' : '';
             lines.push(`### ${lineLabel}${resolvedPart}${linkPart}`, '');
@@ -197,7 +197,7 @@ async function writeMarkdownExport(data: ReviewData, behavior: ExportBehavior): 
     }
 }
 
-async function writeJiraExport(data: ReviewData, behavior: ExportBehavior): Promise<void> {
+async function writeJiraExport(data: ReviewData, behavior: ExportBehavior, urlFor: UrlBuilder = createUrlBuilder()): Promise<void> {
     if (data.threads.length === 0 && !behavior.allowEmpty) {
         vscode.window.showInformationMessage('Code Review: no comments to export.');
         return;
@@ -222,7 +222,7 @@ async function writeJiraExport(data: ReviewData, behavior: ExportBehavior): Prom
             const startLine = thread.line + 1;
             const endLine = thread.endLine + 1;
             const lineLabel = startLine === endLine ? `Line ${startLine}` : `Lines ${startLine}-${endLine}`;
-            const url = buildFileUrl(thread.file, thread.line, thread.endLine);
+            const url = urlFor(thread.file, thread.line, thread.endLine);
             const linkPart = url ? ` | [View online|${url}]` : '';
             const resolvedPart = thread.resolved ? ' (resolved)' : '';
             lines.push(`h3. ${lineLabel}${resolvedPart}${linkPart}`, '');
@@ -259,29 +259,56 @@ async function writeJiraExport(data: ReviewData, behavior: ExportBehavior): Prom
     }
 }
 
-async function syncAutoExports(): Promise<void> {
-    if (!vscode.workspace.workspaceFolders?.[0]?.uri) {
-        return;
+async function fileExists(uri: vscode.Uri): Promise<boolean> {
+    try {
+        await vscode.workspace.fs.stat(uri);
+        return true;
+    } catch {
+        return false;
     }
+}
 
-    const cfg = vscode.workspace.getConfiguration('codeReview');
-    const data = await loadReviewData();
-    if (data.threads.length === 0) {
+// Keeps every derived file in step with the review data: the auto-exports and the
+// latest-review file. Runs after each change and when a related setting changes.
+async function syncDerivedFiles(): Promise<void> {
+    const dirUri = getStorageDirUri();
+    if (!dirUri) {
         return;
     }
+    const data = await loadReviewData();
+    // An unreadable data file loads as empty; deriving from it would wipe the exports.
+    if (isReviewDataCorrupt()) {
+        return;
+    }
+    const urlFor = createUrlBuilder();
     const behavior: ExportBehavior = {
         showDocument: false,
         showNotification: false,
         allowEmpty: true,
     };
 
-    const autoExport = cfg.get<string>('autoExport', 'none');
-    if (autoExport === 'markdown' || autoExport === 'both') {
-        await writeMarkdownExport(data, behavior);
+    // With no comments, refresh an export that already exists (so it does not keep the
+    // last deleted comment) but do not create one.
+    const autoExport = vscode.workspace.getConfiguration('codeReview').get<string>('autoExport', 'none');
+    const empty = data.threads.length === 0;
+    if ((autoExport === 'markdown' || autoExport === 'both')
+        && (!empty || await fileExists(vscode.Uri.joinPath(dirUri, 'code-review.md')))) {
+        await writeMarkdownExport(data, behavior, urlFor);
     }
-    if (autoExport === 'jira' || autoExport === 'both') {
-        await writeJiraExport(data, behavior);
+    if ((autoExport === 'jira' || autoExport === 'both')
+        && (!empty || await fileExists(vscode.Uri.joinPath(dirUri, 'code-review.jira')))) {
+        await writeJiraExport(data, behavior, urlFor);
     }
+    await syncLatestReviewFile(data, urlFor);
+}
+
+// Serialises syncs so two quick changes never interleave their writes.
+let syncChain: Promise<void> = Promise.resolve();
+
+function scheduleDerivedFilesSync(): void {
+    syncChain = syncChain
+        .then(syncDerivedFiles)
+        .catch((error) => console.error('Code Review: updating derived files failed', error));
 }
 
 export function activateCommentController(context: vscode.ExtensionContext): void {
@@ -327,7 +354,8 @@ export function activateCommentController(context: vscode.ExtensionContext): voi
     }
 
     void restoreThreads();
-    void syncAutoExports();
+    scheduleDerivedFilesSync();
+    context.subscriptions.push(onDidChangeReviewData(scheduleDerivedFilesSync));
 
     context.subscriptions.push(watchReviewData(() => {
         void restoreThreads();
@@ -338,10 +366,11 @@ export function activateCommentController(context: vscode.ExtensionContext): voi
         vscode.workspace.onDidChangeConfiguration((event) => {
             if (
                 event.affectsConfiguration('codeReview.autoExport') ||
+                event.affectsConfiguration('codeReview.latestMarkdown') ||
                 event.affectsConfiguration('codeReview.exportCommentTimestamp') ||
                 event.affectsConfiguration('codeReview.storageDir')
             ) {
-                void syncAutoExports();
+                scheduleDerivedFilesSync();
             }
         })
     );

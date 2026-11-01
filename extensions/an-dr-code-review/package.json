@@ -644,6 +644,11 @@
           "default": "none",
           "description": "Automatically keep exported review files updated when review comments change."
         },
+        "codeReview.latestMarkdown": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "After every review change, write `temp-code-review-latest.md` to the workspace root with the open entries and an instruction to delete the file once they are done. The file is removed when no entry is open."
+        },
         "codeReview.submitKey": {
           "type": "string",
           "enum": [
