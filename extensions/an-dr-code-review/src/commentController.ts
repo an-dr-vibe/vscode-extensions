@@ -315,22 +315,44 @@ export function activateCommentController(context: vscode.ExtensionContext): voi
     const ctrl = vscode.comments.createCommentController('an-dr-code-review', 'Code Review');
     context.subscriptions.push(ctrl);
 
+    // Comments need a workspace-relative path: files on disk, plus git: revisions so a
+    // commit-range review can be commented. Other schemes (output, untitled, settings)
+    // and files outside the root used to be saved under a bare file name.
     ctrl.commentingRangeProvider = {
         provideCommentingRanges(doc) {
-            return [new vscode.Range(0, 0, doc.lineCount - 1, 0)];
+            const root = vscode.workspace.workspaceFolders?.[0]?.uri;
+            if (!root || (doc.uri.scheme !== 'file' && doc.uri.scheme !== 'git') || doc.uri.path === root.path) {
+                return [];
+            }
+            const rootPrefix = root.path.endsWith('/') ? root.path : `${root.path}/`;
+            if (!doc.uri.path.startsWith(rootPrefix)) {
+                return [];
+            }
+            return [new vscode.Range(0, 0, Math.max(doc.lineCount - 1, 0), 0)];
         },
     };
 
     const threadToId = new WeakMap<vscode.CommentThread, string>();
     const idToThread = new Map<string, vscode.CommentThread>();
 
-    async function restoreThreads(): Promise<void> {
+    // Restores run one after another; two overlapping runs would each recreate every
+    // thread and leave duplicates in the editor.
+    let restoreChain: Promise<void> = Promise.resolve();
+
+    function restoreThreads(): Promise<void> {
+        restoreChain = restoreChain
+            .then(recreateThreads)
+            .catch((error) => console.error('Code Review: restoring comment threads failed', error));
+        return restoreChain;
+    }
+
+    async function recreateThreads(): Promise<void> {
+        const data = await loadReviewData();
         for (const thread of idToThread.values()) {
             thread.dispose();
         }
         idToThread.clear();
 
-        const data = await loadReviewData();
         const root = vscode.workspace.workspaceFolders?.[0]?.uri;
         if (!root) {
             return;

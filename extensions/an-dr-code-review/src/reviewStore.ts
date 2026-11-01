@@ -300,37 +300,13 @@ export function getCommentCountByFile(data: ReviewData): Map<string, number> {
     return counts;
 }
 
-export function getCommentsForFile(data: ReviewData, file: string): FileCommentEntry[] {
-    const entries: FileCommentEntry[] = [];
-    for (const thread of data.threads) {
-        if (thread.file !== file) {
-            continue;
-        }
-        for (const comment of thread.comments) {
-            entries.push({
-                file: thread.file,
-                line: thread.line,
-                endLine: thread.endLine,
-                resolved: thread.resolved,
-                comment,
-            });
-        }
-    }
-    entries.sort((a, b) => {
-        if (a.line !== b.line) {
-            return a.line - b.line;
-        }
-        return a.comment.timestamp.localeCompare(b.comment.timestamp);
-    });
-    return entries;
-}
-
-export function getCommentsForFiles(data: ReviewData, files: Iterable<string>): FileCommentsGroup[] {
-    const normalizedFiles = new Set(Array.from(files, (file) => file.replace(/\\/g, '/')));
+/** Comments grouped by file; `files` limits the result, and all files are included without it. */
+export function getCommentsForFiles(data: ReviewData, files?: Iterable<string>): FileCommentsGroup[] {
+    const normalizedFiles = files ? new Set(Array.from(files, (file) => file.replace(/\\/g, '/'))) : undefined;
     const groups = new Map<string, FileCommentEntry[]>();
 
     for (const thread of data.threads) {
-        if (!normalizedFiles.has(thread.file)) {
+        if (normalizedFiles && !normalizedFiles.has(thread.file)) {
             continue;
         }
 

@@ -105,14 +105,12 @@ export class CodeReviewCommentsProvider implements vscode.TreeDataProvider<vscod
         if (!vscode.workspace.workspaceFolders?.[0]?.uri) {
             return [new EmptyStateItem('Open a workspace to view comments')];
         }
-        if (!this.selection || this.selection.files.length === 0) {
-            return [new EmptyStateItem('Select a file or folder to view comments')];
-        }
-
+        // Without a selection in the Changes tree, show every comment in the workspace.
         const data = await loadReviewData();
-        const groups = getCommentsForFiles(data, this.selection.files);
+        const scoped = this.selection && this.selection.files.length > 0 ? this.selection : undefined;
+        const groups = getCommentsForFiles(data, scoped?.files);
         if (groups.length === 0) {
-            return [new EmptyStateItem(`No comments for ${this.selection.label}`)];
+            return [new EmptyStateItem(scoped ? `No comments for ${scoped.label}` : 'No review comments yet')];
         }
 
         if (this.commentsViewAsList || groups.length === 1) {

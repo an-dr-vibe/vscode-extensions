@@ -185,7 +185,8 @@ If Explorer decoration colors are disabled, colored file icons provide the same
 status distinction without overriding that global preference. These become explicit
 colored `A`, `D`, `M`, and other Git status badges when label colors are unavailable.
 
-Each comment in the inline widget has **Edit** and **Delete** buttons. Edited comments
+The Comments view lists every comment in the workspace, or only those under the file or
+folder selected in the Changes tree. Each comment in the inline widget has **Edit** and **Delete** buttons. Edited comments
 are labelled `edited`. The Comments view's title bar has a **Clear All Comments**
 button, which asks for confirmation before it removes every comment in the workspace.
 
