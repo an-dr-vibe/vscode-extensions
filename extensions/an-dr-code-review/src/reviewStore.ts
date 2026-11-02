@@ -48,8 +48,10 @@ export interface ReviewedFilesData {
     files: Record<string, ReviewedFileState>;
 }
 
-const DEFAULT_STORAGE_DIR = '.artifacts-temp';
+const DEFAULT_STORAGE_DIR = '.tmp-code-review';
 const LEGACY_STORAGE_DIR = 'code-review';
+/** The default before .tmp-code-review; reviews stored there are copied over once. */
+const PREVIOUS_DEFAULT_STORAGE_DIR = '.artifacts-temp';
 const DATA_FILE_NAME = '.code-review.json';
 const CHECKED_FILES_NAME = '.checked-files.json';
 const GITIGNORE_CONTENT = '*\n';
@@ -105,8 +107,9 @@ async function readText(uri: vscode.Uri): Promise<string | undefined> {
 }
 
 // Before codeReview.storageDir existed, data lived in code-review/ (the comments file
-// could be moved with the removed codeReview.dataFile setting). Copy it once into the
-// new folder so existing reviews survive; the old files stay where they were.
+// could be moved with the removed codeReview.dataFile setting); later the default folder
+// was .artifacts-temp/. Copy the newest of them once into the current folder so existing
+// reviews survive; the old files stay where they were.
 const migratedDirs = new Set<string>();
 
 async function migrateLegacyData(dir: vscode.Uri): Promise<void> {
@@ -118,7 +121,11 @@ async function migrateLegacyData(dir: vscode.Uri): Promise<void> {
 
     const legacyDataFile = vscode.workspace.getConfiguration('codeReview').get<string>('dataFile')
         || `${LEGACY_STORAGE_DIR}/${DATA_FILE_NAME}`;
+    // The previous default comes first: a target that exists is never overwritten, so the
+    // newer copy wins when both old folders hold data.
     const pairs: Array<[vscode.Uri, vscode.Uri]> = [
+        [vscode.Uri.joinPath(root, PREVIOUS_DEFAULT_STORAGE_DIR, DATA_FILE_NAME), vscode.Uri.joinPath(dir, DATA_FILE_NAME)],
+        [vscode.Uri.joinPath(root, PREVIOUS_DEFAULT_STORAGE_DIR, CHECKED_FILES_NAME), vscode.Uri.joinPath(dir, CHECKED_FILES_NAME)],
         [vscode.Uri.joinPath(root, legacyDataFile), vscode.Uri.joinPath(dir, DATA_FILE_NAME)],
         [vscode.Uri.joinPath(root, LEGACY_STORAGE_DIR, CHECKED_FILES_NAME), vscode.Uri.joinPath(dir, CHECKED_FILES_NAME)],
     ];

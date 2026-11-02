@@ -189,8 +189,10 @@ The Comments view lists every comment in the workspace, or only those under the 
 folder selected in the Changes tree. Each comment in the inline widget has **Edit** and **Delete** buttons. Edited comments
 are labelled `edited`. The Comments view's title bar has a **Clear All Comments**
 button, which asks for confirmation before it removes every comment in the workspace.
+Before clearing, it saves the review as `cleared/code-review-cleared-<YYYY-MM-DD_hh-mm>.md`
+and `.json` in the storage folder: the Markdown to read, the JSON to restore.
 
-After every review change the extension writes `temp-code-review-latest.md` to the
+After every review change the extension writes `tmp-code-review-latest.md` to the
 workspace root. It lists the open entries as `file:line` references and tells whoever
 addresses them, a person or an agent, to delete the file once every entry is done. The
 file is removed automatically when no entry is open; turn it off with `latestMarkdown`.
@@ -204,8 +206,8 @@ leaves it for you to fix.
 
 |Setting|Default|Description|
 |-------|-------|-----------|
-|`storageDir`|`".artifacts-temp"`|Workspace-relative folder for review comments, checked files, and exports. It gets a `.gitignore` that ignores everything in it. Data from the old `code-review/` folder is copied here on first use.|
-|`latestMarkdown`|`true`|Write `temp-code-review-latest.md` with the open entries after every review change.|
+|`storageDir`|`".tmp-code-review"`|Workspace-relative folder for review comments, checked files, and exports. It gets a `.gitignore` that ignores everything in it. Data from the old `code-review/` folder or the previous `.artifacts-temp/` default is copied here on first use.|
+|`latestMarkdown`|`true`|Write `tmp-code-review-latest.md` with the open entries after every review change.|
 |`autoExport`|`"none"`|Keep `code-review.md`, `code-review.jira`, or both up to date in the storage folder after every change.|
 |`showAuthor`|`false`|Include author names in comments and exports.|
 |`author`|`""`|Author override for comment/export metadata.|

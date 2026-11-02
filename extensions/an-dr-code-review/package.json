@@ -620,8 +620,8 @@
       "properties": {
         "codeReview.storageDir": {
           "type": "string",
-          "default": ".artifacts-temp",
-          "markdownDescription": "Folder, relative to the workspace root, that holds review comments, checked files, and exports. It gets a `.gitignore` that ignores everything in it. Data from the old `code-review/` folder is copied here on first use."
+          "default": ".tmp-code-review",
+          "markdownDescription": "Folder, relative to the workspace root, that holds review comments, checked files, and exports. It gets a `.gitignore` that ignores everything in it. Data from the old `code-review/` folder or the previous `.artifacts-temp/` default is copied here on first use. Cleared reviews are saved in its `cleared/` folder."
         },
         "codeReview.showAuthor": {
           "type": "boolean",
@@ -647,7 +647,7 @@
         "codeReview.latestMarkdown": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "After every review change, write `temp-code-review-latest.md` to the workspace root with the open entries and an instruction to delete the file once they are done. The file is removed when no entry is open."
+          "markdownDescription": "After every review change, write `tmp-code-review-latest.md` to the workspace root with the open entries and an instruction to delete the file once they are done. The file is removed when no entry is open."
         },
         "codeReview.submitKey": {
           "type": "string",

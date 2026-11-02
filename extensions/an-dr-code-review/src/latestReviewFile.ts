@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import { ReviewData, StoredThread, getStorageDirSetting } from './reviewStore';
 
-export const LATEST_REVIEW_FILE_NAME = 'temp-code-review-latest.md';
+export const LATEST_REVIEW_FILE_NAME = 'tmp-code-review-latest.md';
+/** The name before tmp-code-review-latest.md; removed on sync so only one copy remains. */
+const PREVIOUS_LATEST_REVIEW_FILE_NAME = 'temp-code-review-latest.md';
 
 export type UrlBuilder = (file: string, startLine: number, endLine: number) => string | null;
 
@@ -65,6 +67,11 @@ export async function syncLatestReviewFile(data: ReviewData, urlFor: UrlBuilder)
         return;
     }
     const uri = vscode.Uri.joinPath(root, LATEST_REVIEW_FILE_NAME);
+    try {
+        await vscode.workspace.fs.delete(vscode.Uri.joinPath(root, PREVIOUS_LATEST_REVIEW_FILE_NAME));
+    } catch {
+        // Never written, or already gone.
+    }
     const hasOpen = data.threads.some((thread) => !thread.resolved && thread.comments.length > 0);
     if (!hasOpen) {
         try {

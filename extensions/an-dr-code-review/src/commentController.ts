@@ -134,11 +134,8 @@ function createUrlBuilder(): UrlBuilder {
     };
 }
 
-async function writeMarkdownExport(data: ReviewData, behavior: ExportBehavior, urlFor: UrlBuilder = createUrlBuilder()): Promise<void> {
-    if (data.threads.length === 0 && !behavior.allowEmpty) {
-        vscode.window.showInformationMessage('Code Review: no comments to export.');
-        return;
-    }
+/** Renders every thread, resolved ones included, as the Markdown export does. */
+function renderReviewMarkdown(data: ReviewData, urlFor: UrlBuilder, title: string, note: string): string {
     const byFile = new Map<string, StoredThread[]>();
     for (const thread of data.threads) {
         if (!byFile.has(thread.file)) {
@@ -148,9 +145,9 @@ async function writeMarkdownExport(data: ReviewData, behavior: ExportBehavior, u
     }
 
     const lines: string[] = [
-        '# Code Review',
+        `# ${title}`,
         '',
-        `*Exported: ${new Date().toISOString().split('T')[0]}*`,
+        `*${note}*`,
         '',
     ];
 
@@ -181,19 +178,67 @@ async function writeMarkdownExport(data: ReviewData, behavior: ExportBehavior, u
         }
     }
 
+    return lines.join('\n');
+}
+
+async function writeMarkdownExport(data: ReviewData, behavior: ExportBehavior, urlFor: UrlBuilder = createUrlBuilder()): Promise<void> {
+    if (data.threads.length === 0 && !behavior.allowEmpty) {
+        vscode.window.showInformationMessage('Code Review: no comments to export.');
+        return;
+    }
+    const markdown = renderReviewMarkdown(data, urlFor, 'Code Review', `Exported: ${new Date().toISOString().split('T')[0]}`);
     const dirUri = getStorageDirUri();
     if (!dirUri) {
         return;
     }
     await ensureStorageDir();
     const outUri = vscode.Uri.joinPath(dirUri, 'code-review.md');
-    await vscode.workspace.fs.writeFile(outUri, Buffer.from(lines.join('\n'), 'utf8'));
+    await vscode.workspace.fs.writeFile(outUri, Buffer.from(markdown, 'utf8'));
     if (behavior.showDocument) {
         const doc = await vscode.workspace.openTextDocument(outUri);
         await vscode.window.showTextDocument(doc);
     }
     if (behavior.showNotification) {
         vscode.window.showInformationMessage(`Code review exported to ${getStorageDirSetting()}/code-review.md`);
+    }
+}
+
+function localStamp(date: Date): string {
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_${pad(date.getHours())}-${pad(date.getMinutes())}`;
+}
+
+/**
+ * Saves the review about to be cleared to <storage>/cleared/code-review-cleared-<time>.md and
+ * .json: the Markdown to read, the JSON to restore. Returns the Markdown path relative to the
+ * workspace, or undefined when there is no storage folder.
+ */
+async function archiveClearedReview(data: ReviewData): Promise<string | undefined> {
+    const dirUri = getStorageDirUri();
+    if (!dirUri) {
+        return undefined;
+    }
+    await ensureStorageDir();
+    const clearedUri = vscode.Uri.joinPath(dirUri, 'cleared');
+    await vscode.workspace.fs.createDirectory(clearedUri);
+    const now = new Date();
+    const base = `code-review-cleared-${localStamp(now)}`;
+    let name = base;
+    for (let suffix = 2; await uriExists(vscode.Uri.joinPath(clearedUri, `${name}.json`)); suffix++) {
+        name = `${base}-${suffix}`;
+    }
+    const markdown = renderReviewMarkdown(data, createUrlBuilder(), 'Code Review (cleared)', `Cleared: ${now.toLocaleString()}`);
+    await vscode.workspace.fs.writeFile(vscode.Uri.joinPath(clearedUri, `${name}.md`), Buffer.from(markdown, 'utf8'));
+    await vscode.workspace.fs.writeFile(vscode.Uri.joinPath(clearedUri, `${name}.json`), Buffer.from(JSON.stringify(data, null, 2), 'utf8'));
+    return `${getStorageDirSetting()}/cleared/${name}.md`;
+}
+
+async function uriExists(uri: vscode.Uri): Promise<boolean> {
+    try {
+        await vscode.workspace.fs.stat(uri);
+        return true;
+    } catch {
+        return false;
     }
 }
 
@@ -541,17 +586,21 @@ export function activateCommentController(context: vscode.ExtensionContext): voi
         const commentLabel = commentCount === 1 ? '1 comment' : `${commentCount} comments`;
         const choice = await vscode.window.showWarningMessage(
             `Delete all ${commentLabel} in ${threadLabel}?`,
-            { modal: true, detail: 'This removes every review comment in the workspace and cannot be undone.' },
+            { modal: true, detail: `This removes every review comment in the workspace. A copy is saved in ${getStorageDirSetting()}/cleared/.` },
             'Delete All',
         );
         if (choice !== 'Delete All') {
             return;
         }
+        const archived = await archiveClearedReview(data);
         await saveReviewData({ ...data, threads: [] });
         for (const thread of idToThread.values()) {
             thread.dispose();
         }
         idToThread.clear();
+        if (archived) {
+            vscode.window.showInformationMessage(`Code Review: cleared comments saved to ${archived}.`);
+        }
     }
 
     const updateHasComments = async () => {
