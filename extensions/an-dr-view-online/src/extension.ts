@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { activeFileUri, onDidChangeActiveFile } from './activeFile';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execSync } from 'child_process';
@@ -130,18 +131,14 @@ async function openOrCopy(
     includeLineNumber: boolean,
     forceTarget: 'browser' | 'clipboard' | null
 ): Promise<void> {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-        vscode.window.showErrorMessage('an-dr View Online: no active editor.');
-        return;
-    }
-    if (editor.document.isUntitled || editor.document.uri.scheme !== 'file') {
-        vscode.window.showErrorMessage('an-dr View Online: file must be saved to disk.');
+    const fileUri = activeFileUri();
+    if (!fileUri) {
+        vscode.window.showErrorMessage('an-dr View Online: the active tab shows no file saved to disk.');
         return;
     }
 
     const config = vscode.workspace.getConfiguration('viewOnline');
-    const filePath = editor.document.uri.fsPath;
+    const filePath = fileUri.fsPath;
 
     const info = resolveRemoteInfo(filePath, config);
     if (!info) {
@@ -171,7 +168,9 @@ async function openOrCopy(
 
     let startLine: number | undefined;
     let endLine: number | undefined;
-    if (includeLineNumber) {
+    // Only a text editor has a cursor; other editors (Markdown, images) open the whole file.
+    const editor = textEditorFor(fileUri);
+    if (includeLineNumber && editor) {
         const sel = editor.selection;
         startLine = sel.start.line + 1;
         const useRange = config.get<boolean>('useSelectionRange', true);
@@ -193,6 +192,12 @@ async function openOrCopy(
     }
 }
 
+/** The active text editor when it shows `uri`; undefined for custom editors and other tabs. */
+function textEditorFor(uri: vscode.Uri): vscode.TextEditor | undefined {
+    const editor = vscode.window.activeTextEditor;
+    return editor?.document.uri.toString() === uri.toString() ? editor : undefined;
+}
+
 // ── Status bar management ─────────────────────────────────────────────────────
 
 function createStatusBarItem(config: vscode.WorkspaceConfiguration): vscode.StatusBarItem {
@@ -212,21 +217,22 @@ function updateStatusBar(
         return;
     }
 
-    const editor = vscode.window.activeTextEditor;
-    if (!editor || editor.document.isUntitled || editor.document.uri.scheme !== 'file') {
+    const fileUri = activeFileUri();
+    if (!fileUri) {
         item.hide();
         return;
     }
 
-    const info = resolveRemoteInfo(editor.document.uri.fsPath, config);
+    const info = resolveRemoteInfo(fileUri.fsPath, config);
     if (!info) {
         item.hide();
         return;
     }
 
     const { icon, name } = getPlatformLabel(info.parsed.host);
-    const includeLine = config.get<boolean>('includeLineOnClick', true);
-    const line = editor.selection.active.line + 1;
+    const editor = textEditorFor(fileUri);
+    const includeLine = config.get<boolean>('includeLineOnClick', true) && editor !== undefined;
+    const line = (editor?.selection.active.line ?? 0) + 1;
 
     const iconOnly = config.get<boolean>('statusBarIconOnly', false);
     item.text = iconOnly ? icon : `${icon} ${name}`;
@@ -262,7 +268,7 @@ export function activate(context: vscode.ExtensionContext): void {
         vscode.commands.registerCommand('an-dr-view-online.copyUrlAtLine',
             () => openOrCopy(true, 'clipboard')),
 
-        vscode.window.onDidChangeActiveTextEditor(refresh),
+        onDidChangeActiveFile(refresh),
         vscode.window.onDidChangeTextEditorSelection(refresh),
 
         vscode.workspace.onDidChangeConfiguration(e => {

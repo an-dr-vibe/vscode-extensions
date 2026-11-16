@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { activeFileUri, onDidChangeActiveFile } from './activeFile';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execSync, spawn } from 'child_process';
@@ -390,13 +391,13 @@ function statusBarIcon(config: vscode.WorkspaceConfiguration): string {
 function updateStatusBar(item: vscode.StatusBarItem, config: vscode.WorkspaceConfiguration): void {
     if (!config.get<boolean>('showStatusBar', true)) { item.hide(); return; }
 
-    const editor = vscode.window.activeTextEditor;
-    if (!editor || editor.document.isUntitled || editor.document.uri.scheme !== 'file') {
+    const fileUri = activeFileUri();
+    if (!fileUri) {
         item.hide();
         return;
     }
 
-    const gitRoot = getGitRoot(editor.document.uri.fsPath);
+    const gitRoot = getGitRoot(fileUri.fsPath);
     if (!gitRoot) { item.hide(); return; }
 
     const toolId = config.get<string>('tool', 'smartgit');
@@ -422,12 +423,12 @@ export function activate(context: vscode.ExtensionContext): void {
 
     context.subscriptions.push(
         vscode.commands.registerCommand('an-dr-git-tool.openInGitTool', async () => {
-            const editor = vscode.window.activeTextEditor;
-            if (!editor || editor.document.isUntitled || editor.document.uri.scheme !== 'file') {
+            const fileUri = activeFileUri();
+            if (!fileUri) {
                 vscode.window.showErrorMessage('an-dr Git Tool: no active file.');
                 return;
             }
-            const gitRoot = getGitRoot(editor.document.uri.fsPath);
+            const gitRoot = getGitRoot(fileUri.fsPath);
             if (!gitRoot) {
                 vscode.window.showErrorMessage('an-dr Git Tool: file is not inside a git repo.');
                 return;
@@ -435,7 +436,7 @@ export function activate(context: vscode.ExtensionContext): void {
             await launchTool(gitRoot);
         }),
 
-        vscode.window.onDidChangeActiveTextEditor(refresh),
+        onDidChangeActiveFile(refresh),
 
         vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration('gitTool')) {

@@ -11,6 +11,7 @@ no admin rights needed.
 ### an-dr: View in Git Tool
 
 Opens the current repo in a git GUI tool from the status bar.
+The current file is the active tab's file, in any editor: text, diff, notebook, or a custom editor such as a Markdown editor.
 
 **Config** (`gitTool.*`):
 
@@ -42,6 +43,7 @@ shapes the invocation; the tool always runs with the repo as its working directo
 ### an-dr: View Online
 
 Opens the current file (and optionally line / selection) on GitHub, GitLab, or Bitbucket.
+It works from any editor tab — text, diff, notebook, or a custom editor such as a Markdown editor; only a text editor has a cursor, so other editors open the whole file without a line.
 Platform and remote URL are auto-detected from git.
 
 **Config** (`viewOnline.*`):
