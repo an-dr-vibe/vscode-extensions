@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-08-19-060938963Z-82c0f1a0-head",
+  "reference": "HEAD",
+  "scope": "verify",
+  "createdAt": "2026-08-19T06:09:38.9706334Z",
+  "updatedAt": "2026-08-19T06:10:31.9772704Z",
+  "summary": "Adds a \"custom\" tool driven by gitTool.toolPath/customArgs/customName and makes gitTool.toolPath accept a bare command resolved from PATH. Verified out of VS Code with a stubbed host: bare name, bare name plus args, ${repoPath} placeholder, full path in both slash styles, missing executable, empty toolPath, and a non-shim executable. tsc compiles clean; README updated; markdown checker reports no errors.",
+  "sections": {
+    "critical": [],
+    "high": [],
+    "improvements": [
+      {
+        "id": "IM.1",
+        "file": "extensions/an-dr-git-tool/src/extension.ts",
+        "line": 197,
+        "text": "The custom tool label falls back to the executable basename, so a bare \"commits\" shows as lowercase \"commits\" in the status bar.",
+        "recommendation": "Left as is: gitTool.customName overrides it and is documented; capitalising a user command would misname tools whose casing is meaningful.",
+        "addedAt": "2026-08-19T06:10:05.6859478Z"
+      },
+      {
+        "id": "IM.2",
+        "file": "extensions/an-dr-git-tool/src/extension.ts",
+        "line": 366,
+        "text": "Shell invocation for .cmd/.bat shims quotes each token with double quotes, which would break an argument that itself contains a double quote.",
+        "recommendation": "Accepted risk: git tool arguments are paths and flags; revisit only if a real tool needs embedded quotes.",
+        "addedAt": "2026-08-19T06:10:08.714358Z"
+      }
+    ],
+    "positives": [
+      {
+        "id": "PO.1",
+        "text": "PATH resolution was generalised in resolveUserExe rather than special-cased for the custom tool, so every built-in also accepts a bare name in gitTool.toolPath.",
+        "addedAt": "2026-08-19T06:10:12.0680287Z"
+      }
+    ]
+  },
+  "verdict": {
+    "decision": "approve",
+    "rationale": "No critical or high findings; the two improvements are recorded as accepted tradeoffs."
+  }
+}

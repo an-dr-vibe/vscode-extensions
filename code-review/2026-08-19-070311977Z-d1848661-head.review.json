@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-08-19-070311977Z-d1848661-head",
+  "reference": "HEAD",
+  "scope": "verify",
+  "createdAt": "2026-08-19T07:03:11.9877113Z",
+  "updatedAt": "2026-08-19T07:03:24.7920556Z",
+  "summary": "Removes the agents submodule (worktree, index, .gitmodules, and .git/modules) and rewrites the Primary instructions section to require a global agents-install of a separate clone. git submodule status is empty and no submodule.agents config remains; bootstrap.ps1 never cloned recursively and install.ps1 only walks extensions/, so neither needed a change. Markdown checker reports no errors on either file.",
+  "sections": {
+    "critical": [],
+    "high": [],
+    "improvements": [
+      {
+        "id": "IM.1",
+        "file": "AGENTS.md",
+        "line": 12,
+        "text": "The install snippet clones into the current directory, so where the clone lives is left to the reader.",
+        "recommendation": "Left deliberately: the clone location is the user machine owner decision and agents-install records whatever path it is run from.",
+        "addedAt": "2026-08-19T07:03:17.9389197Z"
+      }
+    ],
+    "positives": [
+      {
+        "id": "PO.1",
+        "text": "CLAUDE.md was updated alongside AGENTS.md, so neither file still points at the removed REPO/agents path.",
+        "addedAt": "2026-08-19T07:03:15.0537055Z"
+      }
+    ]
+  },
+  "verdict": {
+    "decision": "approve",
+    "rationale": "Documentation-only change beyond the submodule removal; no critical or high findings."
+  }
+}
